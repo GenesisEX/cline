@@ -146,6 +146,8 @@ export class Task {
 
 	// Message and conversation state
 	messageStateHandler: MessageStateHandler
+	private lastLLMRequestForLogging: string | undefined // Stores the full LLM request for logging
+
 	constructor(
 		controller: Controller,
 		mcpHub: McpHub,
@@ -1728,6 +1730,13 @@ export class Task {
 			// saves task history item which we use to keep track of conversation history deleted range
 		}
 
+		// Store the complete LLM request for logging
+		const fullLLMRequestForLogging = {
+			system: systemPrompt,
+			messages: contextManagementMetadata.truncatedConversationHistory,
+		}
+		this.lastLLMRequestForLogging = JSON.stringify(fullLLMRequestForLogging, null, 2)
+
 		const stream = this.api.createMessage(systemPrompt, contextManagementMetadata.truncatedConversationHistory)
 
 		const iterator = stream[Symbol.asyncIterator]()
@@ -2511,9 +2520,10 @@ export class Task {
 
 				// Log the LLM interaction
 				await logLLMInteraction(
-					userContent.map((block) => formatContentBlockToMarkdown(block)).join("\n\n"),
+					this.lastLLMRequestForLogging || "No LLM Request captured", // Use the stored request
 					assistantMessage,
 				)
+				this.lastLLMRequestForLogging = undefined // Clear after logging
 
 				// NOTE: this comment is here for future reference - this was a workaround for userMessageContent not getting set to true. It was due to it not recursively calling for partial blocks when didRejectTool, so it would get stuck waiting for a partial block to complete before it could continue.
 				// in case the content blocks finished
